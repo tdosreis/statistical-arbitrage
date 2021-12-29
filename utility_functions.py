@@ -1,7 +1,6 @@
 import numpy as np
-from statsmodels.tsa.stattools import adfuller
-from statsmodels.tsa.stattools import coint
-from sklearn.linear_model import LinearRegression
+import yfinance as yf
+import datetime as dt
 
 
 def eval_division(val, m=5): 
@@ -9,6 +8,7 @@ def eval_division(val, m=5):
         return True
     else:
         return False
+
     
 def mask_idx(idx, m=5): 
     nulls = (
@@ -19,34 +19,36 @@ def mask_idx(idx, m=5):
     )
     return nulls
 
-def linear_regression(x, y, thresh=0.05):
-    reg = LinearRegression()
-    reg.fit(x.values.reshape(-1,1), y.values)
-    print(f'Intercept: {reg.intercept_}')
-    print(f'Coefficient: {reg.coef_[0]}')
-    y_pred = x * reg.coef_ + reg.intercept_
-    residuals = y - y_pred
-    adf, p_value = check_residuals(residuals)
-    if p_value < thresh:
-        return reg, y_pred, residuals
-    else:
-        raise Exception('Residual is not stationary!')
 
-def check_residuals(residuals): 
-    adf = adfuller(residuals)[0]
-    p_value = adfuller(residuals)[1]
-    print(f'ADF Statistic: {adf}')
-    print(f'p-value: {p_value}')
-    return adf, p_value
+def gather_data(tickers, n_years=1):
 
-def zscore(x):
-    mean = np.mean(x)
-    std = np.std(x)
-    z_score = (x - mean) / std
-    return z_score
+    n_days = int(365 * n_years)
 
-def mod_zscore(x):
-    median = np.median(x)
-    mad = np.median(np.abs(x - median))
-    mod_zscore = (0.6745)*(x - median)/mad
-    return mod_zscore
+    assets = {}
+    for ticker in tickers:
+        print(f'Gathering data for {ticker} for the past {n_years} years')
+        data = (
+            yf.download(
+                tickers=ticker,
+                start=dt.date.today() - dt.timedelta(n_days),
+                end=dt.datetime.today()
+            )
+        )    
+        assets[ticker] = data
+    return assets
+
+
+def fix_date_columns(assets, date_col='Date', date_format='%Y-%m-%d'):    
+    for key in assets.keys(): 
+        print(f'Fixing data for {key}')
+        assets[key].reset_index(inplace=True)
+        assets[key][date_col] = (
+            assets[key][date_col]
+            .apply(lambda x: dt.datetime.strftime(x, date_format))
+        )
+
+        
+def read_yfinance_data(tickers, n_years=1, date_col='Date', date_format='%Y-%m-%d'): 
+    assets = gather_data(tickers, n_years)
+    fix_date_columns(assets)
+    return assets
